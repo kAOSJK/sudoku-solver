@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c89 --pedantic -g3
+CFLAGS = -W -Wall -Werror -Wextra -std=c89 --pedantic -g3
 RM = rm -rf
 
 FILE = sudoku.c
