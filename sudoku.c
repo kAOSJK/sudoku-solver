@@ -12,9 +12,9 @@ int is_valid_grid(int **grid)
     int answer = 1;
     int x, y;
 
-    for (x = 0; x < SIZE_GRID; x++)
+    for (x = 0; x < SIZE_GRID && answer == 1; x++)
     {
-        for (y = 0; y < SIZE_GRID; y++)
+        for (y = 0; y < SIZE_GRID && answer == 1; y++)
         {
             if (!IS_NUMBER(grid[x][y]))
                 answer = 0;
@@ -65,8 +65,11 @@ void free_grid(int **grid)
 
     for (i = 0; i < SIZE_GRID; i++)
     {
-        free(grid[i]);
-        grid[i] = NULL;
+        if (grid[i] != NULL)
+        {
+            free(grid[i]);
+            grid[i] = NULL;
+        }
     }
 
     free(grid);
@@ -116,7 +119,7 @@ int compare_grid(int **grid, int **grid_cpy)
 }
 
 /* function that return 1 if the num already exist on the column else return 0 */
-int same_column(int x, int y, int num, int **grid)
+int same_column(int x, int num, int **grid)
 {
     int answer = 0;
     int i;
@@ -131,7 +134,7 @@ int same_column(int x, int y, int num, int **grid)
 }
 
 /* function that return 1 if the num already exist on the row else return 0 */
-int same_row(int x, int y, int num, int **grid)
+int same_row(int y, int num, int **grid)
 {
     int answer = 0;
     int i;
@@ -168,7 +171,7 @@ int same_square(int x, int y, int num, int **grid)
 /* function that return 1 if the passed number num is placable else return 0 */
 int is_placable(int x, int y, int num, int **grid)
 {
-    if (!same_square(x, y, num, grid) && !same_row(x, y, num, grid) && !same_column(x, y, num, grid))
+    if (!same_square(x, y, num, grid) && !same_row(y, num, grid) && !same_column(x, num, grid))
         return 1;
 
     return 0;
@@ -239,9 +242,17 @@ void cpy_grid(int **dest, int **src)
 
 void print_instruction() { printf("program usage: ./sudoku <grid_file> <result_file>\ngrid_file being the grid file and result_file being the output file.\n"); }
 
-void print_timers(double time_spent, double time_spent_solving, int **try_counter_ptr)
+void print_timers(double time_spent, double time_spent_solving, int *try_counter_ptr)
 {
-    printf("\n  Resolved in %d tries\n", **try_counter_ptr);
+    printf("\n  Resolved in %d tries\n", *try_counter_ptr);
+    if (time_spent == 0)
+    {
+        printf("  -------------------------------\n");
+        printf("  Elapsed Time       : less than 1 sec\n\n");
+
+        return;
+    }
+
     printf("  -------------------------------\n");
     printf("  Solving Wait Time  : %f ms\n", time_spent_solving);
     printf("  Printing Wait Time : %f ms\n", time_spent - time_spent_solving);
@@ -254,7 +265,7 @@ int main(int argc, char **argv)
     FILE *fp = NULL;
     FILE *out = NULL;
     /* TIME VARs */
-    double time_spent, time_spent_solving, time_spent_printing;
+    double time_spent, time_spent_solving;
     clock_t before_solve, after_solve;
     time_t begin = time(NULL);
     time_t end;
@@ -264,11 +275,10 @@ int main(int argc, char **argv)
     int **grid = NULL;
     int **grid_cpy = NULL;
     int *solution_counter = NULL;
-    int i, x, y;
-    int delete;
+    int i;
 
+    (void)argc;                       /* unused error for argc */
     setvbuf(stdout, NULL, _IONBF, 0); /* make fprintf printable at any time (bug that make fprintf unprintable) */
-
     if (argv[1] == NULL || argv[1][0] == '-')
     {
         if (argv[1] == NULL || argv[1][1] == 'h')
@@ -300,9 +310,6 @@ int main(int argc, char **argv)
 
     /* malloc grid */
     grid = (int **)malloc(sizeof(int *) * SIZE_GRID);
-    for (i = 0; i < SIZE_GRID; i++)
-        grid[i] = (int *)malloc(sizeof(int) * SIZE_GRID);
-
     if (grid == NULL)
     {
         fprintf(stderr, "ERROR: allocation of grid pointer failed\n");
@@ -310,9 +317,20 @@ int main(int argc, char **argv)
         return 0;
     }
 
-    /* extract the file grid */
-    get_grid(fp, grid);
+    for (i = 0; i < SIZE_GRID; i++)
+    {
+        grid[i] = (int *)malloc(sizeof(int) * SIZE_GRID);
+        if (grid[i] == NULL)
+        {
+            fprintf(stderr, "ERROR: allocation of grid[%d] pointer failed\n", i);
+            free_grid(grid);
 
+            return 0;
+        }
+    }
+
+    /* extract the file grid and close it */
+    get_grid(fp, grid);
     fclose(fp);
 
     /* check if the grid is valid */
@@ -326,9 +344,6 @@ int main(int argc, char **argv)
 
     /* malloc grid_cpy */
     grid_cpy = (int **)malloc(sizeof(int *) * SIZE_GRID);
-    for (i = 0; i < SIZE_GRID; i++)
-        grid_cpy[i] = (int *)malloc(sizeof(int) * SIZE_GRID);
-
     if (grid_cpy == NULL)
     {
         fprintf(stderr, "ERROR: allocation of grid_cpy pointer failed\n");
@@ -337,12 +352,24 @@ int main(int argc, char **argv)
         return 0;
     }
 
+    for (i = 0; i < SIZE_GRID; i++)
+    {
+        grid_cpy[i] = (int *)malloc(sizeof(int) * SIZE_GRID);
+        if (grid_cpy[i] == NULL)
+        {
+            fprintf(stderr, "ERROR: allocation of grid_cpy[%d] pointer failed\n", i);
+            free_grid(grid);
+            free_grid(grid_cpy);
+
+            return 0;
+        }
+    }
+
     /* copy non resolved grid to grid_cpy */
     cpy_grid(grid_cpy, grid);
 
     /* malloc the solution_counter */
     solution_counter = malloc(sizeof(int));
-
     if (solution_counter == NULL)
     {
         fprintf(stderr, "ERROR: allocation of solution_counter pointer failed\n");
@@ -353,15 +380,12 @@ int main(int argc, char **argv)
     }
 
     *solution_counter = 0;
-
     try_counter = malloc(sizeof(int));
-
     if (try_counter == NULL)
     {
         fprintf(stderr, "ERROR: allocation of try_counter pointer failed\n");
         free_grid(grid);
         free_grid(grid_cpy);
-
         free(solution_counter);
         solution_counter = NULL;
 
@@ -371,7 +395,7 @@ int main(int argc, char **argv)
     *try_counter = 0;
 
     /* hide cursor */
-    printf("\e[?25l");
+    printf("\033[?25l");
 
     /* get solve begin time */
     before_solve = clock();
@@ -384,7 +408,7 @@ int main(int argc, char **argv)
     time_spent_solving = (double)(after_solve - before_solve) / CLOCKS_PER_SEC;
 
     /* enable cursor */
-    printf("\e[?25h");
+    printf("\033[?25h");
 
     /* check if the grid is solved */
     if (compare_grid(grid, grid_cpy) == 1)
@@ -392,10 +416,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR: ./%s grid file is unsolvable\n", argv[1]);
         free_grid(grid);
         free_grid(grid_cpy);
-
         free(solution_counter);
         solution_counter = NULL;
-
         free(try_counter);
         try_counter = NULL;
 
@@ -414,33 +436,29 @@ int main(int argc, char **argv)
         fprintf(stderr, "ERROR: can't open ./%s file\n", argv[2]);
         free_grid(grid);
         free_grid(grid_cpy);
-
         free(solution_counter);
         solution_counter = NULL;
-
         free(try_counter);
         try_counter = NULL;
 
         return 0;
     }
 
-    /* copy resolved grid to new file */
+    /* copy resolved grid to new file and close it */
     save_grid_to_file(out, grid);
-
     fclose(out);
-
-    free_grid(grid);
-    free_grid(grid_cpy);
-
-    free(solution_counter);
-    solution_counter = NULL;
 
     /* get program end time */
     end = time(NULL);
     time_spent = (double)difftime(end, begin) * 1000;
 
-    print_timers(time_spent, time_spent_solving, &try_counter);
+    print_timers(time_spent, time_spent_solving, try_counter);
 
+    /* FREES */
+    free_grid(grid);
+    free_grid(grid_cpy);
+    free(solution_counter);
+    solution_counter = NULL;
     free(try_counter);
     try_counter = NULL;
 
