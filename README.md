@@ -11,7 +11,11 @@ Sudoku Solver is a program that can resolve any sudoku grid.
 
 ```bash
 git clone https://github.com/kAOSJK/sudoku-solver.git
+```
 
+## Compile
+
+```bash
 make sudoku
 ```
 
